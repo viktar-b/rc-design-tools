@@ -87,7 +87,7 @@ class CrackWidthCalc:
 
         s_rmax = self.get_s_rmax()
         e_sm = self.get_e_sm()
-        e_cm = self.e_cm()
+        e_cm = self.get_e_cm()
 
         crack_width = s_rmax*(e_sm - e_cm)
 
@@ -104,20 +104,67 @@ class CrackWidthCalc:
 
 class ServiceabilityChecks: 
 
-    def __init__(self, section_properties):
-        self.sections_properties = section_properties
+    def __init__(self, section_properties, moment):
+        self.section_properties = section_properties
+        self.sls_moment = moment
+        
+        self.E_ceff_short_term = self.section_properties.concrete_properties.E_cm
+        self.E_ceff_long_term = self.E_ceff_short_term / (1 + self.section_properties.concrete_properties.creep)
+
+        self.d_c_st = self.get_concrete_depth_in_compression(self.E_ceff_short_term)
+        self.d_c_lt = self.get_concrete_depth_in_compression(self.E_ceff_long_term)
+
+        self.I_cracked_short_term = self.get_cracked_second_moment_of_area(self.d_c_st, self.E_ceff_short_term)
+        self.I_cracked_long_term = self.get_cracked_second_moment_of_area(self.d_c_lt, self.E_ceff_long_term)
+
         self.longterm_sigma_s = self.get_longterm_sigma_s()
 
-    def get_longterm_sigma_s():
+    def get_longterm_sigma_s(self):
         """                       
         For pure bending:
             sigma_s = M_sls_permanent*10^6*(d - d_c_lt)/I_cracked + M_sls_permanent*10^6*(d - d_c_st)/I_cracked
-        
-        Permanent moment is not considered at this stage         
         """
+        d = self.section_properties.depth_to_centroid
+
+        sigma_s = self.sls_moment*10**6 * (d - self.d_c_lt) / self.I_cracked_long_term + \
+                    self.sls_moment*10*6 * (d - self.d_c_st) / self.I_cracked_short_term
+
+        return sigma_s  
+
+    def get_cracked_second_moment_of_area(self, d_c, E_ceff):
+        A_s  = self.section_properties.steel_area_tension 
+        d = self.section_properties.depth_to_centroid
+        E_s = self.section_properties.steel_properties.E_s 
+        b = self.section_properties.width
+        
+        I_cracked = A_s * (d - d_c)**2 + 1/3 * (E_ceff / E_s) * (b * d_c**3)
+  
+        return I_cracked  
 
 
-        return 
+    def get_concrete_depth_in_compression(self, effective_modulus_of_concrete): 
+        """
+        Concrete depth in compression in pure bending
+        """
+        E_ceff = effective_modulus_of_concrete
+
+        A_s  = self.section_properties.steel_area_tension 
+        E_s = self.section_properties.steel_properties.E_s 
+        d = self.section_properties.depth_to_centroid
+        b = self.section_properties.width
+
+        d_c  = (-A_s*E_s + np.sqrt((A_s*E_s)**2 + 2*b*A_s*E_s*E_ceff*d)) / (b * E_ceff)  
+        
+        return d_c
+
+    def to_string(self):
+        return f"E_ceff_short_term = {self.E_ceff_short_term:0.2f}\n" + \
+                f"d_c_st = {self.d_c_st:0.2f}\n" + \
+                f"I_cracked_short_term = {self.I_cracked_short_term:0.2f}\n" + \
+                f"E_ceff_long_term = {self.E_ceff_long_term:0.2f}\n" + \
+                f"d_c_lt = {self.d_c_lt:0.2f}\n" + \
+                f"I_cracked_long_term = {self.I_cracked_long_term:0.2f}\n" + \
+                f"longterm_sigma_s = {self.longterm_sigma_s:0.2f}\n"
 
 
 class SectionProperties: 
@@ -193,7 +240,7 @@ class ConcreteProperties:
     exposed_perimter = 1000
     age_of_concrete_at_moment_considered = 2557 
     age_of_concrete_at_loading = 28
-    creep = 1.26
+    creep = 1.256
 
     def __init__(self, f_ck):
         self.f_ck = f_ck
