@@ -42,7 +42,7 @@ class CrackWidthCalc:
 
     s_rmax for long term loading
         if spacing > 5 (c + diam/2)
-            s_rmax = 1.3*(h-x)      comm: x - d_c cocnrete depth in compression 
+            s_rmax = 1.3*(h-d_c)  self.serviceability_checks.d_c_lt   comm: d_c - self.serviceability_checks.d_c_lt_c cocnrete depth in compression 
         else 
             s_rmax = k_3*c + k_1*k_2*k_4*diam/rho_eff   comm: 
                                                             c - cover to bar controlling crack for crackwidth calculations 
@@ -52,61 +52,127 @@ class CrackWidthCalc:
 
         max(0,6*(sigma_s/E_s ), (sigma_s - k_t*f_ct_eff/rho_p_eff*(1 + alpha_e*rho_eff))/E_s)     comm:
 
-                                        k_t = 0.4
-                                        f_ct_eff = 3.2 MPa for f_ck = 35 
                                         alpha_e = E_s / E_cm = 200,000 / 34.077 for f_ck = 35 
-                                        d - depth to centroid F77 = sum(A_s_layer*d_layer)/A_s_total 
-                                        
-                                        To be determined: 
-                                            rho_eff = A_s/A_ceff
-                                                A_ceff = h_ceff*width 
-                                                    h_ceff = max( min(
-                                                                        (h' - d_c)/3,  
-                                                                        2.5*(h-d), 
-                                                                        h/2)
-                                                                        ), 
-                                                                bar_group)  =   c_dur + d_shear_bar + d_first_layer + 
-                                                                                dist_between_layers (if second is present) +  
-                                                                                d_second_layer 
-                                                                                + aggregate_size + 5 TODO??
-                                            d_c_lt - F192 = 
-                                            d_c_st - F175
-                                            I_cracked 
-                                        
                                         
     """
+    k_1 = 0.8
+    k_2 = 0.5 #TODO constant for, fix later 
+    k_3 = 3.4
+    k_4 = 0.425
+    k_t_long_term = 0.4
 
-    def __init__(self, section_properrties):
-        self.section_properties = section_properrties
-        
-    def get_crack_width(self, c_nom_tension, c_nom_compression, c_dur, moment):
-        self.c_nom_tension = c_nom_tension
-        self.c_nom_compression = c_nom_compression 
-        self.c_dur = c_dur
-        self.moment = moment
+    def __init__(self, serviceability_checks):
+        self.serviceability_checks = serviceability_checks
+        self.equivalent_diameter = self.get_equivalent_diameter()
+        self.rho_eff = self.get_rho_eff()
 
-        s_rmax = self.get_s_rmax()
-        e_sm = self.get_e_sm()
-        e_cm = self.get_e_cm()
+        self.s_rmax = self.get_s_rmax()
+        self.e_sm_minus_e_cm = self.get_e_sm_minus_e_cm()
+        self.crack_width = self.get_crack_width()
 
-        crack_width = s_rmax*(e_sm - e_cm)
+    def get_crack_width(self):
+
+        s_rmax = self.s_rmax
+        e_sm_minus_e_cm = self.get_e_sm_minus_e_cm()
+
+        crack_width = s_rmax*e_sm_minus_e_cm
 
         return crack_width
 
-    def get_s_rmax():
-        pass
+    def get_e_sm_minus_e_cm(self):
+        sigma_s = self.serviceability_checks.longterm_sigma_s
+        f_ctm = self.serviceability_checks.section_properties.concrete_properties.f_ctm
+        rho_eff  = self.rho_eff
+        k_t = self.k_t_long_term
 
-    def get_e_sm():
-        pass
+        E_s = self.serviceability_checks.section_properties.steel_properties.E_s 
+        E_cm = self.serviceability_checks.section_properties.concrete_properties.E_cm
+        alpha_e = E_s / E_cm 
 
-    def get_e_cm():
-        pass
+        e_sm_minus_e_cm = max(
+            0.6*( sigma_s / E_s ),
+            (sigma_s - k_t * (f_ctm/rho_eff) * (1 + alpha_e*rho_eff))/E_s
+        )
+        return e_sm_minus_e_cm
+
+    def get_s_rmax(self):
+        spacing = self.serviceability_checks.section_properties.rf_spacing_first_layer
+        c_dur = self.serviceability_checks.section_properties.c_dur
+        diam = self.equivalent_diameter 
+        h = self.serviceability_checks.section_properties.depth
+        d_c = self.serviceability_checks.d_c_lt
+        rho_eff = self.rho_eff
+
+        if spacing > 5*(c_dur + diam/2):
+            return 1.3*(h-d_c) 
+        else:
+            return self.k_3*c_dur + self.k_1*self.k_2*self.k_4*diam/rho_eff
+
+
+    def get_equivalent_diameter(self):
+        d_1 = self.serviceability_checks.section_properties.rf_diameter_first_layer
+        d_2 = self.serviceability_checks.section_properties.rf_diameter_second_layer
+        d_3 = self.serviceability_checks.section_properties.rf_diameter_third_layer
+
+
+        spacing_1 = self.serviceability_checks.section_properties.rf_spacing_first_layer 
+        spacing_2 = self.serviceability_checks.section_properties.rf_spacing_second_layer 
+        spacing_3 = self.serviceability_checks.section_properties.rf_spacing_third_layer 
+
+        width = self.serviceability_checks.section_properties.width
+
+        n_1 = width / spacing_1 if spacing_1 != 0 else 0 
+        n_2 = width / spacing_2 if spacing_2 != 0 else 0 
+        n_3 = width / spacing_3 if spacing_3 != 0 else 0
+
+        return (n_1*d_1**2 + n_2*d_2**2 + n_3*d_3**2) / (n_1*d_1 + n_2*d_2 + n_3*d_3) 
+
+    def get_rho_eff(self):
+        d_1 = self.serviceability_checks.section_properties.rf_diameter_first_layer
+        d_2 = self.serviceability_checks.section_properties.rf_diameter_second_layer
+        d_3 = self.serviceability_checks.section_properties.rf_diameter_third_layer
+
+        width = self.serviceability_checks.section_properties.width
+        depth = self.serviceability_checks.section_properties.depth
+        aggregate_size = self.serviceability_checks.section_properties.aggregate_size
+        d = self.serviceability_checks.section_properties.depth_to_centroid
+        d_c_lt = self.serviceability_checks.d_c_lt
+
+        dist_between_layers_1 = self.serviceability_checks.section_properties.spacing_between_rf if d_2 > 0 else 0 
+        dist_between_layers_2 = self.serviceability_checks.section_properties.spacing_between_rf if d_3 > 0 else 0 
+
+        A_s = self.serviceability_checks.section_properties.steel_area_tension       
+        c_nom = self.serviceability_checks.section_properties.c_nom_tension 
+        c_dur = self.serviceability_checks.section_properties.c_dur 
+        
+        h_dash = depth - c_nom + c_dur 
+        bar_group = c_dur + d_1 + dist_between_layers_1 + \
+                            d_2 + dist_between_layers_2 + \
+                            d_3 + \
+                            aggregate_size + 5
+
+        h_ceff = max(
+            min((h_dash - d_c_lt)/3, 2.5*(h_dash - d), h_dash/2), 
+            bar_group
+        )
+
+        A_ceff = h_ceff * width 
+        rho_eff = A_s / A_ceff
+        return rho_eff
+    
+    def to_string(self):
+        return f"rho_eff = {self.rho_eff:0.4f}\n" + \
+                f"equivalent_diameter = {self.equivalent_diameter:0.2f}\n" + \
+                f"s_rmax = {self.s_rmax:0.2f}\n" + \
+                f"e_sm_minus_e_cm = {self.e_sm_minus_e_cm:0.2f}\n" + \
+                f"crack_width = {self.crack_width:0.2f}\n"  
+
 
 class ServiceabilityChecks: 
 
     def __init__(self, section_properties, moment):
         self.section_properties = section_properties
-        self.sls_moment = moment
+        self.sls_moment_permanent = moment
         
         self.E_ceff_short_term = self.section_properties.concrete_properties.E_cm
         self.E_ceff_long_term = self.E_ceff_short_term / (1 + self.section_properties.concrete_properties.creep)
@@ -121,13 +187,12 @@ class ServiceabilityChecks:
 
     def get_longterm_sigma_s(self):
         """                       
-        For pure bending:
-            sigma_s = M_sls_permanent*10^6*(d - d_c_lt)/I_cracked + M_sls_permanent*10^6*(d - d_c_st)/I_cracked
+        Stress at the bottom steel face for pure bending:
         """
         d = self.section_properties.depth_to_centroid
 
-        sigma_s = self.sls_moment*10**6 * (d - self.d_c_lt) / self.I_cracked_long_term + \
-                    self.sls_moment*10*6 * (d - self.d_c_st) / self.I_cracked_short_term
+        sigma_s = self.sls_moment_permanent*10**6 * (d - self.d_c_lt) / self.I_cracked_long_term + \
+                    self.sls_moment_permanent*10*6 * (d - self.d_c_st) / self.I_cracked_short_term
 
         return sigma_s  
 
@@ -175,11 +240,12 @@ class SectionProperties:
     f_yd = 500
     f_ck = 35
     spacing_between_rf = 25
+    aggregate_size = 20
 
     def __init__(self, c_nom_tension, c_nom_compression, c_dur,
-                        rf_diameter_first_layer, rf_spacing_first_layer,
-                        rf_diameter_second_layer, rf_spacing_second_layer,
-                        rf_diameter_third_layer, rf_spacing_third_layer):
+                    rf_diameter_first_layer, rf_spacing_first_layer,
+                    rf_diameter_second_layer, rf_spacing_second_layer,
+                    rf_diameter_third_layer, rf_spacing_third_layer):
         
         self.c_nom_tension = c_nom_tension
         self.c_nom_compression = c_nom_compression
