@@ -3,18 +3,25 @@ import numpy as np
 import xlwings as xw
 
 @xw.func
-def get_crack_width(c_nom_tension, c_nom_compression, c_dur, moment,
-    rf_diameter_first_layer = 0,
-    rf_spacing_first_layer = 0,
-    rf_diameter_second_layer = 0,
-    rf_spacing_second_layer = 0,
-    rf_diameter_third_layer = 0,
-    rf_spacing_third_layer = 0):
+def get_crack_width(c_nom_tension, c_nom_compression, c_dur, moment, \
+    rf_diameter_first_layer = 0, rf_spacing_first_layer = 0, \
+    rf_diameter_second_layer = 0, rf_spacing_second_layer = 0, \
+    rf_diameter_third_layer = 0,  rf_spacing_third_layer = 0, \
+    is_shear_present = False, shear_bar_diameter = 0):
 
     """
     To activate a function in the excel file, press "Import Functions" 
     in the xlwings tab 
     """
+    rf_diameter_second_layer = 0 if rf_diameter_second_layer == None else rf_diameter_second_layer
+    rf_spacing_second_layer = 0 if rf_spacing_second_layer == None else rf_spacing_second_layer
+    rf_diameter_third_layer = 0 if rf_diameter_third_layer == None else rf_diameter_third_layer
+    rf_spacing_third_layer = 0 if rf_spacing_third_layer  == None else rf_spacing_third_layer
+
+    if is_shear_present:
+        c_nom_tension += shear_bar_diameter
+        c_nom_compression += shear_bar_diameter
+        c_dur += shear_bar_diameter
 
     section_properrties = SectionProperties(c_nom_tension, c_nom_compression, c_dur,
         rf_diameter_first_layer,
@@ -35,26 +42,6 @@ def get_crack_width(c_nom_tension, c_nom_compression, c_dur, moment,
 
 class CrackWidthCalc: 
 
-    """
-    Preparation - bottom-up calcualtions for the crack width 
-
-    w_k = s_rmax*(e_sm - e_cm)
-
-    s_rmax for long term loading
-        if spacing > 5 (c + diam/2)
-            s_rmax = 1.3*(h-d_c)  self.serviceability_checks.d_c_lt   comm: d_c - self.serviceability_checks.d_c_lt_c cocnrete depth in compression 
-        else 
-            s_rmax = k_3*c + k_1*k_2*k_4*diam/rho_eff   comm: 
-                                                            c - cover to bar controlling crack for crackwidth calculations 
-                                                            rho_eff = A_s/A_c,eff
-
-    (e_sm - e_cm) for long term loading  
-
-        max(0,6*(sigma_s/E_s ), (sigma_s - k_t*f_ct_eff/rho_p_eff*(1 + alpha_e*rho_eff))/E_s)     comm:
-
-                                        alpha_e = E_s / E_cm = 200,000 / 34.077 for f_ck = 35 
-                                        
-    """
     k_1 = 0.8
     k_2 = 0.5 #TODO constant for, fix later 
     k_3 = 3.4
@@ -284,7 +271,7 @@ class SectionProperties:
                 d_3*self._area_3) / self.steel_area_tension
     
     def get_single_layer_steel_area(self, diameter, spacing):
-        if diameter != 0:
+        if diameter != 0 and diameter != None:
             return (np.pi*diameter**2 / 4) * (self.width / spacing)
         else:
             return 0
