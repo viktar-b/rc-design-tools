@@ -4,10 +4,10 @@ import xlwings as xw
 
 @xw.func
 def get_crack_width(c_nom_tension, c_nom_compression, c_dur, moment, \
+    is_shear_present, shear_bar_diameter, \
     rf_diameter_first_layer = 0, rf_spacing_first_layer = 0, \
     rf_diameter_second_layer = 0, rf_spacing_second_layer = 0, \
-    rf_diameter_third_layer = 0,  rf_spacing_third_layer = 0, \
-    is_shear_present = False, shear_bar_diameter = 0):
+    rf_diameter_third_layer = 0,  rf_spacing_third_layer = 0):
 
     """
     To activate a function in the excel file, press "Import Functions" 
@@ -23,21 +23,24 @@ def get_crack_width(c_nom_tension, c_nom_compression, c_dur, moment, \
         c_nom_compression += shear_bar_diameter
         c_dur += shear_bar_diameter
 
-    section_properrties = SectionProperties(c_nom_tension, c_nom_compression, c_dur,
-        rf_diameter_first_layer,
-        rf_spacing_first_layer,
-        rf_diameter_second_layer,
-        rf_spacing_second_layer,
-        rf_diameter_third_layer,
-        rf_spacing_third_layer
-    )
-    
+    try:
+        section_properrties = SectionProperties(c_nom_tension, c_nom_compression, c_dur,
+            rf_diameter_first_layer,
+            rf_spacing_first_layer,
+            rf_diameter_second_layer,
+            rf_spacing_second_layer,
+            rf_diameter_third_layer,
+            rf_spacing_third_layer
+        )
+        
 
-    serviceability_checks = ServiceabilityChecks(section_properrties, moment)
-    crack_width_calc = CrackWidthCalc(serviceability_checks)
+        serviceability_checks = ServiceabilityChecks(section_properrties, moment)
+        crack_width_calc = CrackWidthCalc(serviceability_checks)
 
-    crack_width = crack_width_calc.get_crack_width()
-    return crack_width 
+        crack_width = crack_width_calc.get_crack_width()
+        return crack_width 
+    except Exception:
+        return 0
 
 
 class CrackWidthCalc: 
