@@ -13,10 +13,12 @@ def get_crack_width(c_nom_tension, c_nom_compression, c_dur, moment, \
     rf_diameter_second_layer = 0, rf_spacing_second_layer = 0, \
     rf_diameter_third_layer = 0,  rf_spacing_third_layer = 0):
 
-    rf_diameter_second_layer = 0 if rf_diameter_second_layer == None else rf_diameter_second_layer
-    rf_spacing_second_layer = 0 if rf_spacing_second_layer == None else rf_spacing_second_layer
-    rf_diameter_third_layer = 0 if rf_diameter_third_layer == None else rf_diameter_third_layer
-    rf_spacing_third_layer = 0 if rf_spacing_third_layer  == None else rf_spacing_third_layer
+    check_value = lambda x: 0 if x == None else x
+
+    rf_diameter_second_layer = check_value(rf_diameter_second_layer)
+    rf_spacing_second_layer = check_value(rf_spacing_second_layer)
+    rf_diameter_third_layer = check_value(rf_diameter_third_layer)
+    rf_spacing_third_layer = check_value(rf_spacing_third_layer)
 
     if is_shear_present:
         c_nom_tension += shear_bar_diameter
@@ -39,33 +41,35 @@ def get_crack_width(c_nom_tension, c_nom_compression, c_dur, moment, \
 
         crack_width = crack_width_calc.get_crack_width()
         return crack_width
-    except Exception:
+    except BaseException:
         return 0
 
 
 class CrackWidthCalc:
 
     k_1 = 0.8
-    k_2 = 0.5 #TODO constant for now, fix later
+    k_2 = 0.5 #TODO deterministc value, not constant
     k_3 = 3.4
     k_4 = 0.425
     k_t_long_term = 0.4
 
     def __init__(self, serviceability_checks):
         self.serviceability_checks = serviceability_checks
-        self.equivalent_diameter = self.get_equivalent_diameter()
-        self.rho_eff = self.get_rho_eff()
+        self.set_up_properties()
 
-        self.s_rmax = self.get_s_rmax()
-        self.e_sm_minus_e_cm = self.get_e_sm_minus_e_cm()
-        self.crack_width = self.get_crack_width()
+    @classmethod
+    def set_up_properties(cls):
+        self.equivalent_diameter = cls.get_equivalent_diameter()
+        self.rho_eff = cls.get_rho_eff()
+        self.s_rmax = cls.get_s_rmax()
+        self.e_sm_minus_e_cm = cls.get_e_sm_minus_e_cm()
+        self.crack_width = cls.get_crack_width()
 
     def get_crack_width(self):
-
         s_rmax = self.s_rmax
-        e_sm_minus_e_cm = self.get_e_sm_minus_e_cm()
 
-        crack_width = s_rmax*e_sm_minus_e_cm
+        e_sm_minus_e_cm = self.get_e_sm_minus_e_cm()
+        crack_width = s_rmax * e_sm_minus_e_cm
 
         return crack_width
 
@@ -74,7 +78,6 @@ class CrackWidthCalc:
         f_ctm = self.serviceability_checks.section_properties.concrete_properties.f_ctm
         rho_eff  = self.rho_eff
         k_t = self.k_t_long_term
-
         E_s = self.serviceability_checks.section_properties.steel_properties.E_s
         E_cm = self.serviceability_checks.section_properties.concrete_properties.E_cm
         alpha_e = E_s / E_cm
@@ -83,6 +86,7 @@ class CrackWidthCalc:
             0.6*( sigma_s / E_s ),
             (sigma_s - k_t * (f_ctm/rho_eff) * (1 + alpha_e*rho_eff))/E_s
         )
+
         return e_sm_minus_e_cm
 
     def get_s_rmax(self):
@@ -93,8 +97,8 @@ class CrackWidthCalc:
         d_c = self.serviceability_checks.d_c_lt
         rho_eff = self.rho_eff
 
-        if spacing > 5*(c_dur + diam/2):
-            return 1.3*(h-d_c)
+        if spacing > 5 * (c_dur + diam/2):
+            return 1.3 * (h-d_c)
         else:
             return self.k_3*c_dur + self.k_1*self.k_2*self.k_4*diam/rho_eff
 
@@ -104,16 +108,17 @@ class CrackWidthCalc:
         d_2 = self.serviceability_checks.section_properties.rf_diameter_second_layer
         d_3 = self.serviceability_checks.section_properties.rf_diameter_third_layer
 
-
         spacing_1 = self.serviceability_checks.section_properties.rf_spacing_first_layer
         spacing_2 = self.serviceability_checks.section_properties.rf_spacing_second_layer
         spacing_3 = self.serviceability_checks.section_properties.rf_spacing_third_layer
 
         width = self.serviceability_checks.section_properties.width
 
-        n_1 = width / spacing_1 if spacing_1 != 0 else 0
-        n_2 = width / spacing_2 if spacing_2 != 0 else 0
-        n_3 = width / spacing_3 if spacing_3 != 0 else 0
+        get_n = lambda spacing: width / spacing if spacing else 0 
+        
+        n_1 = get_n(spacing_1)
+        n_2 = get_n(spacing_2)
+        n_3 = get_n(spacing_3)
 
         return (n_1*d_1**2 + n_2*d_2**2 + n_3*d_3**2) / (n_1*d_1 + n_2*d_2 + n_3*d_3)
 
@@ -164,16 +169,20 @@ class ServiceabilityChecks:
         self.section_properties = section_properties
         self.sls_moment_permanent = moment
 
-        self.E_ceff_short_term = self.section_properties.concrete_properties.E_cm
-        self.E_ceff_long_term = self.E_ceff_short_term / (1 + self.section_properties.concrete_properties.creep)
+        self.set_up_properties()
 
-        self.d_c_st = self.get_concrete_depth_in_compression(self.E_ceff_short_term)
-        self.d_c_lt = self.get_concrete_depth_in_compression(self.E_ceff_long_term)
+    @classmethod
+    def set_up_properties(cls):
+        cls.E_ceff_short_term = cls.section_properties.concrete_properties.E_cm
+        cls.E_ceff_long_term = cls.E_ceff_short_term / (1 + cls.section_properties.concrete_properties.creep)
 
-        self.I_cracked_short_term = self.get_cracked_second_moment_of_area(self.d_c_st, self.E_ceff_short_term)
-        self.I_cracked_long_term = self.get_cracked_second_moment_of_area(self.d_c_lt, self.E_ceff_long_term)
+        cls.d_c_st = cls.get_concrete_depth_in_compression(cls.E_ceff_short_term)
+        cls.d_c_lt = cls.get_concrete_depth_in_compression(cls.E_ceff_long_term)
 
-        self.longterm_sigma_s = self.get_longterm_sigma_s()
+        cls.I_cracked_short_term = cls.get_cracked_second_moment_of_area(cls.d_c_st, cls.E_ceff_short_term)
+        cls.I_cracked_long_term = cls.get_cracked_second_moment_of_area(cls.d_c_lt, cls.E_ceff_long_term)
+
+        cls.longterm_sigma_s = cls.get_longterm_sigma_s()
 
     def get_longterm_sigma_s(self):
         """
@@ -181,8 +190,8 @@ class ServiceabilityChecks:
         """
         d = self.section_properties.depth_to_centroid
 
-        sigma_s = self.sls_moment_permanent*10**6 * (d - self.d_c_lt) / self.I_cracked_long_term + \
-                    self.sls_moment_permanent*10*6 * (d - self.d_c_st) / self.I_cracked_short_term
+        sigma_s = self.sls_moment_permanent*(10**6) * (d - self.d_c_lt) / self.I_cracked_long_term + \
+                    self.sls_moment_permanent*(10**6) * (d - self.d_c_st) / self.I_cracked_short_term
 
         return sigma_s
 
@@ -248,18 +257,22 @@ class SectionProperties:
         self.rf_diameter_third_layer = rf_diameter_third_layer
         self.rf_spacing_third_layer = rf_spacing_third_layer
 
-        self._area_1 = self.get_single_layer_steel_area(self.rf_diameter_first_layer, self.rf_spacing_first_layer)
-        self._area_2 = self.get_single_layer_steel_area(self.rf_diameter_second_layer, self.rf_spacing_second_layer)
-        self._area_3 = self.get_single_layer_steel_area(self.rf_diameter_third_layer, self.rf_spacing_third_layer)
+        self.set_up_properties() 
+        
+    @classmethod
+    def set_up_properties(cls):
+        self._area_1 = cls.get_single_layer_steel_area(cls.rf_diameter_first_layer, cls.rf_spacing_first_layer)
+        self._area_2 = cls.get_single_layer_steel_area(cls.rf_diameter_second_layer, cls.rf_spacing_second_layer)
+        self._area_3 = cls.get_single_layer_steel_area(cls.rf_diameter_third_layer, cls.rf_spacing_third_layer)
 
-        self.steel_area_tension = self.get_steel_area_tension()
-        self.depth_to_centroid = self.get_depth_to_centroid()
+        self.steel_area_tension = cls.get_steel_area_tension()
+        self.depth_to_centroid = cls.get_depth_to_centroid()
 
-        self.steel_properties = SteelProperties(self.f_yd)
-        self.concrete_properties = ConcreteProperties(self.f_ck)
+        self.steel_properties = SteelProperties(cls.f_yd)
+        self.concrete_properties = ConcreteProperties(cls.f_ck)
 
-        self.depth_to_neutral_axis = self.depth / 2
-        self.second_moment_of_area =  self.width * self.depth**3 / 12
+        self.depth_to_neutral_axis = cls.depth / 2
+        self.second_moment_of_area =  cls.width * cls.depth**3 / 12
 
     def get_steel_area_tension(self):
         return self._area_1 + self._area_2 + self._area_3
@@ -301,13 +314,17 @@ class ConcreteProperties:
     def __init__(self, f_ck):
         self.f_ck = f_ck
 
-        self.f_av = self.get_f_av()
-        self.f_cm = self.get_f_cm()
-        self.f_ctm = self.get_f_ctm()
-        self.E_cm = self.get_E_cm()
-        self.f_cd_flexural = self.get_f_cd_flexural()
-        self.f_cd_shear = self.get_f_cd_shear()
-        self.f_ctd = self.get_f_ctd()
+        self.set_up_properties()
+    
+    @classmethod
+    def set_up_properties(cls):
+        self.f_av = cls.get_f_av()
+        self.f_cm = cls.get_f_cm()
+        self.f_ctm = cls.get_f_ctm()
+        self.E_cm = cls.get_E_cm()
+        self.f_cd_flexural = cls.get_f_cd_flexural()
+        self.f_cd_shear = cls.get_f_cd_shear()
+        self.f_ctd = cls.get_f_ctd()
 
     def get_f_av(self):
         return 0.459*self.f_ck
