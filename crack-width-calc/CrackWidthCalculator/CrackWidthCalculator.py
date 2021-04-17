@@ -259,20 +259,19 @@ class SectionProperties:
 
         self.set_up_properties() 
         
-    @classmethod
     def set_up_properties(cls):
-        self._area_1 = cls.get_single_layer_steel_area(cls.rf_diameter_first_layer, cls.rf_spacing_first_layer)
-        self._area_2 = cls.get_single_layer_steel_area(cls.rf_diameter_second_layer, cls.rf_spacing_second_layer)
-        self._area_3 = cls.get_single_layer_steel_area(cls.rf_diameter_third_layer, cls.rf_spacing_third_layer)
+        self._area_1 = self.get_single_layer_steel_area(self.rf_diameter_first_layer, self.rf_spacing_first_layer)
+        self._area_2 = cselfls.get_single_layer_steel_area(self.rf_diameter_second_layer, self.rf_spacing_second_layer)
+        self._area_3 = self.get_single_layer_steel_area(self.rf_diameter_third_layer, self.rf_spacing_third_layer)
 
-        self.steel_area_tension = cls.get_steel_area_tension()
-        self.depth_to_centroid = cls.get_depth_to_centroid()
+        self.steel_area_tension = self.get_steel_area_tension()
+        self.depth_to_centroid = self.get_depth_to_centroid()
 
-        self.steel_properties = SteelProperties(cls.f_yd)
-        self.concrete_properties = ConcreteProperties(cls.f_ck)
+        self.steel_properties = SteelProperties(self.f_yd)
+        self.concrete_properties = ConcreteProperties(self.f_ck)
 
-        self.depth_to_neutral_axis = cls.depth / 2
-        self.second_moment_of_area =  cls.width * cls.depth**3 / 12
+        self.depth_to_neutral_axis = self.depth / 2
+        self.second_moment_of_area =  self.width * self.depth**3 / 12
 
     def get_steel_area_tension(self):
         return self._area_1 + self._area_2 + self._area_3
@@ -292,7 +291,11 @@ class SectionProperties:
         else:
             return 0
 
-    def to_string(self):
+    def __str__(self):
+        return f"steel_area_tension = {self.steel_area_tension:0.2f}\n" + \
+                f"depth_to_centroid = {self.depth_to_centroid:0.2f}\n"
+
+    def __repr__(self):
         return f"steel_area_tension = {self.steel_area_tension:0.2f}\n" + \
                 f"depth_to_centroid = {self.depth_to_centroid:0.2f}\n"
 
@@ -313,18 +316,16 @@ class ConcreteProperties:
 
     def __init__(self, f_ck):
         self.f_ck = f_ck
-
         self.set_up_properties()
     
-    @classmethod
-    def set_up_properties(cls):
-        self.f_av = cls.get_f_av()
-        self.f_cm = cls.get_f_cm()
-        self.f_ctm = cls.get_f_ctm()
-        self.E_cm = cls.get_E_cm()
-        self.f_cd_flexural = cls.get_f_cd_flexural()
-        self.f_cd_shear = cls.get_f_cd_shear()
-        self.f_ctd = cls.get_f_ctd()
+    def set_up_properties(self):
+        self.f_av = self.get_f_av()
+        self.f_cm = self.get_f_cm()
+        self.f_ctm = self.get_f_ctm()
+        self.E_cm = self.get_E_cm()
+        self.f_cd_flexural = self.get_f_cd_flexural()
+        self.f_cd_shear = self.get_f_cd_shear()
+        self.f_ctd = self.get_f_ctd()
 
     def get_f_av(self):
         return 0.459*self.f_ck
@@ -368,11 +369,16 @@ class SteelProperties:
 
     def __init__(self, f_yk):
         self.f_yk = f_yk
-
         self.f_yd = f_yk / self.gamma_s
 
-    def to_string(self):
-        return f"E_s = {self.E_s:0.2f}\n" + \
+    def __str__(self):
+        return f"E_s = {self.E_s:0.0f}\n" + \
                 f"gamma_s = {self.gamma_s:0.2f}\n" + \
-                f"f_yk = {self.f_yk:0.2f}\n" + \
+                f"f_yk = {self.f_yk:0.0f}\n" + \
+                f"f_yd = {self.f_yd:0.2f}\n"
+    
+    def __repr__(self):
+        return f"E_s = {self.E_s:0.0f}\n" + \
+                f"gamma_s = {self.gamma_s:0.2f}\n" + \
+                f"f_yk = {self.f_yk:0.0f}\n" + \
                 f"f_yd = {self.f_yd:0.2f}\n"
